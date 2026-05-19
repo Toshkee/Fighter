@@ -12,6 +12,12 @@ namespace SamuraiFighter.Combat
         public Fighter Owner => _owner;
         public Health Health => _health;
 
+        private void Awake()
+        {
+            if (_owner == null) _owner = GetComponentInParent<Fighter>();
+            if (_health == null) _health = GetComponentInParent<Health>();
+        }
+
         private void Reset()
         {
             _owner = GetComponentInParent<Fighter>();

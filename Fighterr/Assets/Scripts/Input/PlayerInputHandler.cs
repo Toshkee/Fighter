@@ -14,6 +14,7 @@ namespace SamuraiFighter.Input
         private InputAction _move;
         private InputAction _jump;
         private InputAction _attack;
+        private InputAction _heavy;
 
         private void Awake()
         {
@@ -31,8 +32,10 @@ namespace SamuraiFighter.Input
             _move = _map.FindAction("Move", throwIfNotFound: true);
             _jump = _map.FindAction("Jump", throwIfNotFound: true);
             _attack = _map.FindAction("Attack", throwIfNotFound: true);
+            _heavy = _map.FindAction("Interact", throwIfNotFound: true);
             _jump.performed += OnJumpPerformed;
             _attack.performed += OnAttackPerformed;
+            _heavy.performed += OnHeavyPerformed;
             _map.Enable();
         }
 
@@ -40,6 +43,7 @@ namespace SamuraiFighter.Input
         {
             if (_jump != null) _jump.performed -= OnJumpPerformed;
             if (_attack != null) _attack.performed -= OnAttackPerformed;
+            if (_heavy != null) _heavy.performed -= OnHeavyPerformed;
             if (_map != null) _map.Disable();
         }
 
@@ -59,6 +63,11 @@ namespace SamuraiFighter.Input
         private void OnAttackPerformed(InputAction.CallbackContext _)
         {
             _fighter.TryLightAttack();
+        }
+
+        private void OnHeavyPerformed(InputAction.CallbackContext _)
+        {
+            _fighter.TryHeavyAttack();
         }
     }
 }

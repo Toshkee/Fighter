@@ -1,0 +1,98 @@
+{
+  "group_id": null,
+  "states": [
+    {
+      "character": {
+        "id": "c0e2db78-4f0b-4f52-9f24-7a4927a6820c",
+        "name": "samurai warrior, side view, dark blue gi, katana sheathed at hip, topknot hair, neutral idle stance, transparent background",
+        "prompt": "samurai warrior, side view, dark blue gi, katana sheathed at hip, topknot hair, neutral idle stance, transparent background",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "side",
+        "created_at": "2026-05-19T12:42:41.471722+00:00"
+      },
+      "folder": "samurai_warrior_side_view_dark_blue_gi_katana_shea",
+      "frames": {
+        "rotations": {
+          "south": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/south.png",
+          "south-east": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/south-east.png",
+          "east": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/east.png",
+          "north-east": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/north-east.png",
+          "north": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/north.png",
+          "north-west": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/north-west.png",
+          "west": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/west.png",
+          "south-west": "samurai_warrior_side_view_dark_blue_gi_katana_shea/rotations/south-west.png"
+        },
+        "animations": {
+          "Walking-17345eab": {
+            "east": [
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Walking-17345eab/east/frame_000.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Walking-17345eab/east/frame_001.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Walking-17345eab/east/frame_002.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Walking-17345eab/east/frame_003.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Walking-17345eab/east/frame_004.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Walking-17345eab/east/frame_005.png"
+            ]
+          },
+          "Breathing_Idle-e181a487": {
+            "east": [
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Breathing_Idle-e181a487/east/frame_000.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Breathing_Idle-e181a487/east/frame_001.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Breathing_Idle-e181a487/east/frame_002.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Breathing_Idle-e181a487/east/frame_003.png"
+            ]
+          },
+          "Fight_Stance_Idle-f06a9a56": {
+            "east": [
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_000.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_001.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_002.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_003.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_004.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_005.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_006.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Fight_Stance_Idle-f06a9a56/east/frame_007.png"
+            ]
+          },
+          "Jumping-8acfa4a8": {
+            "east": [
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_000.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_001.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_002.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_003.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_004.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_005.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_006.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_007.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Jumping-8acfa4a8/east/frame_008.png"
+            ]
+          },
+          "Lead_Jab-64f96616": {
+            "east": [
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Lead_Jab-64f96616/east/frame_000.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Lead_Jab-64f96616/east/frame_001.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/Lead_Jab-64f96616/east/frame_002.png"
+            ]
+          },
+          "High_Kick-110f3d73": {
+            "east": [
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_000.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_001.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_002.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_003.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_004.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_005.png",
+              "samurai_warrior_side_view_dark_blue_gi_katana_shea/animations/High_Kick-110f3d73/east/frame_006.png"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "3.0",
+  "export_date": "2026-05-19T13:12:36.887187"
+}
