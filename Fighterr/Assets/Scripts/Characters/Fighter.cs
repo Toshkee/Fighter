@@ -12,12 +12,13 @@ namespace SamuraiFighter.Characters
         Attack,
         AirAttack,
         Hit,
+        Block,
         BlockStun,
         KnockDown,
         Dead,
     }
 
-    public enum AttackKind { None, Light, Heavy }
+    public enum AttackKind { None, Light, Heavy, Fireball }
 
     [RequireComponent(typeof(Rigidbody2D))]
     public class Fighter : MonoBehaviour
@@ -50,6 +51,18 @@ namespace SamuraiFighter.Characters
         [SerializeField] private float _heavyKnockback = 13f;
         [SerializeField] private int _heavyHitstopFrames = 12;
 
+        [Header("Fireball")]
+        [SerializeField] private GameObject _fireballPrefab;
+        [SerializeField] private int _fireballStartup = 12;
+        [SerializeField] private int _fireballActive = 2;
+        [SerializeField] private int _fireballRecovery = 20;
+
+        [Header("Hit Reaction")]
+        [SerializeField] private int _hitstunFrames = 18;
+
+        [Header("Block")]
+        [SerializeField, Range(0f, 1f)] private float _blockDamageMultiplier = 0.25f;
+
         [Header("References")]
         [SerializeField] private Health _health;
 
@@ -58,6 +71,7 @@ namespace SamuraiFighter.Characters
         private float _moveInput;
         private bool _jumpPressed;
         private bool _crouchHeld;
+        private bool _blockHeld;
         private bool _isGrounded;
 
         private int _attackFrame;
@@ -71,18 +85,40 @@ namespace SamuraiFighter.Characters
         public bool FacingRight => _facingRight;
         public bool IsGrounded => _isGrounded;
         public bool IsAttacking => _currentState == FighterState.Attack;
+        public bool IsHit => _currentState == FighterState.Hit;
+        public bool IsBlocking => _currentState == FighterState.Block;
         public bool IsDead => _currentState == FighterState.Dead;
+        public float BlockDamageMultiplier => _blockDamageMultiplier;
+
+        private int _hitFrame;
 
         private void Awake()
         {
             _rb = GetComponent<Rigidbody2D>();
             if (_health == null) _health = GetComponent<Health>();
-            if (_health != null) _health.OnDied += OnDied;
+            if (_health != null)
+            {
+                _health.OnDied += OnDied;
+                _health.OnDamaged += OnDamaged;
+            }
         }
 
         private void OnDestroy()
         {
-            if (_health != null) _health.OnDied -= OnDied;
+            if (_health != null)
+            {
+                _health.OnDied -= OnDied;
+                _health.OnDamaged -= OnDamaged;
+            }
+        }
+
+        private void OnDamaged(int _)
+        {
+            if (IsDead) return;
+            if (IsBlocking) return;
+            _currentState = FighterState.Hit;
+            _currentAttackKind = AttackKind.None;
+            _hitFrame = 0;
         }
 
         private void OnDied()
@@ -95,6 +131,7 @@ namespace SamuraiFighter.Characters
         public void SetMoveInput(float horizontal) => _moveInput = horizontal;
         public void SetJumpInput(bool pressed) => _jumpPressed = pressed;
         public void SetCrouchInput(bool held) => _crouchHeld = held;
+        public void SetBlockInput(bool held) => _blockHeld = held;
 
         private Hitbox _activeHitbox;
         private int _activeStartup;
@@ -116,9 +153,29 @@ namespace SamuraiFighter.Characters
                         _heavyDamage, _heavyKnockback, _heavyHitstopFrames);
         }
 
+        public void TryFireball()
+        {
+            if (IsDead || IsAttacking || IsHit || IsBlocking || !_isGrounded || _fireballPrefab == null) return;
+            _currentState = FighterState.Attack;
+            _currentAttackKind = AttackKind.Fireball;
+            _attackFrame = 0;
+            _attackTotal = _fireballStartup + _fireballActive + _fireballRecovery;
+            _hitboxFired = false;
+            _activeHitbox = null;
+            _activeStartup = _fireballStartup;
+            _activeActiveFrames = _fireballActive;
+        }
+
+        private void SpawnFireball()
+        {
+            var go = Instantiate(_fireballPrefab, transform.position + new Vector3(_facingRight ? 0.6f : -0.6f, 0.1f, 0f), Quaternion.identity);
+            var proj = go.GetComponent<Projectile>();
+            if (proj != null) proj.Launch(this, _facingRight ? 1f : -1f);
+        }
+
         private void StartAttack(AttackKind kind, Hitbox hb, int startup, int active, int recovery, int damage, float knockback, int hitstop)
         {
-            if (IsDead || IsAttacking || !_isGrounded) return;
+            if (IsDead || IsAttacking || IsHit || IsBlocking || !_isGrounded) return;
             _currentState = FighterState.Attack;
             _currentAttackKind = kind;
             _attackFrame = 0;
@@ -137,6 +194,14 @@ namespace SamuraiFighter.Characters
             if (IsDead) return;
 
             _isGrounded = Physics2D.OverlapCircle(_groundCheck.position, _groundCheckRadius, _groundLayer);
+
+            if (IsHit)
+            {
+                _rb.linearVelocity = new Vector2(_rb.linearVelocity.x * 0.85f, _rb.linearVelocity.y);
+                _hitFrame++;
+                if (_hitFrame >= _hitstunFrames) _currentState = FighterState.Idle;
+                return;
+            }
 
             if (IsAttacking)
             {
@@ -157,7 +222,11 @@ namespace SamuraiFighter.Characters
             if (_attackFrame == _activeStartup && !_hitboxFired)
             {
                 _hitboxFired = true;
-                if (_activeHitbox != null)
+                if (_currentAttackKind == AttackKind.Fireball)
+                {
+                    SpawnFireball();
+                }
+                else if (_activeHitbox != null)
                 {
                     _activeHitbox.Activate(_activeActiveFrames, _activeDamage, _activeKnockback, _activeHitstop);
                 }
@@ -173,7 +242,7 @@ namespace SamuraiFighter.Characters
 
         private void HandleHorizontal()
         {
-            if (_crouchHeld && _isGrounded)
+            if ((_crouchHeld || _blockHeld) && _isGrounded)
             {
                 _rb.linearVelocity = new Vector2(0f, _rb.linearVelocity.y);
                 return;
@@ -193,6 +262,7 @@ namespace SamuraiFighter.Characters
         private void UpdateState()
         {
             if (!_isGrounded) { _currentState = FighterState.Jump; return; }
+            if (_blockHeld) { _currentState = FighterState.Block; return; }
             if (_crouchHeld) { _currentState = FighterState.Crouch; return; }
             _currentState = Mathf.Abs(_moveInput) > 0.01f ? FighterState.Walk : FighterState.Idle;
         }

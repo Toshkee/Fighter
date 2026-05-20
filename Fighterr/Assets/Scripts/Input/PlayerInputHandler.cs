@@ -53,6 +53,13 @@ namespace SamuraiFighter.Input
             Vector2 v = _move.ReadValue<Vector2>();
             _fighter.SetMoveInput(v.x);
             _fighter.SetCrouchInput(v.y < -0.5f);
+
+            var kb = Keyboard.current;
+            if (kb != null)
+            {
+                if (kb.fKey.wasPressedThisFrame) _fighter.TryFireball();
+                _fighter.SetBlockInput(kb.gKey.isPressed);
+            }
         }
 
         private void OnJumpPerformed(InputAction.CallbackContext _)

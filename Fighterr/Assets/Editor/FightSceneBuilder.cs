@@ -7,6 +7,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using SamuraiFighter.Characters;
 using SamuraiFighter.Combat;
+using Object = UnityEngine.Object;
 using SamuraiFighter.Input;
 using SamuraiFighter.Match;
 using SamuraiFighter.UI;
@@ -17,6 +18,7 @@ namespace SamuraiFighter.EditorTools
     {
         private const string ScenePath = "Assets/Scenes/Fight.unity";
         private const string InputActionsPath = "Assets/InputSystem_Actions.inputactions";
+        private const string FireballPrefabPath = "Assets/Prefabs/Fireball.prefab";
         private const string GroundLayerName = "Ground";
         private const string HurtboxLayerName = "Hurtbox";
 
@@ -34,13 +36,15 @@ namespace SamuraiFighter.EditorTools
                 Debug.LogError($"FightSceneBuilder: could not find {InputActionsPath}.");
             }
 
+            var fireballPrefab = EnsureFireballPrefab();
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             var whiteSprite = CreateWhiteSprite();
 
             BuildBackground();
             BuildGround(whiteSprite, groundLayer);
             BuildWalls();
-            var (playerHealth, dummyHealth) = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions);
+            var (playerHealth, dummyHealth) = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
             BuildHUD(whiteSprite, playerHealth, dummyHealth);
             FrameCamera();
             BuildMatchController();
@@ -65,14 +69,14 @@ namespace SamuraiFighter.EditorTools
             ground.AddComponent<BoxCollider2D>();
         }
 
-        private static (Health player, Health dummy) BuildFighters(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions)
+        private static (Health player, Health dummy) BuildFighters(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
         {
-            var (pHealth, pFighter) = BuildPlayer(sprite, groundLayer, hurtboxLayer, actions);
-            var d = BuildDummy(sprite, hurtboxLayer, pFighter);
+            var (pHealth, pFighter) = BuildPlayer(sprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
+            var d = BuildDummy(sprite, hurtboxLayer, pFighter, fireballPrefab);
             return (pHealth, d);
         }
 
-        private static (Health health, Fighter fighter) BuildPlayer(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions)
+        private static (Health health, Fighter fighter) BuildPlayer(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
         {
             var clips = LoadSamuraiClips();
             var player = new GameObject("Player");
@@ -121,6 +125,7 @@ namespace SamuraiFighter.EditorTools
             fSO.FindProperty("_facingRight").boolValue = true;
             fSO.FindProperty("_lightAttackHitbox").objectReferenceValue = lightHitbox;
             fSO.FindProperty("_heavyAttackHitbox").objectReferenceValue = heavyHitbox;
+            fSO.FindProperty("_fireballPrefab").objectReferenceValue = fireballPrefab;
             fSO.FindProperty("_health").objectReferenceValue = health;
             fSO.ApplyModifiedPropertiesWithoutUndo();
 
@@ -147,7 +152,7 @@ namespace SamuraiFighter.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static Health BuildDummy(Sprite sprite, int hurtboxLayer, Fighter playerFighter)
+        private static Health BuildDummy(Sprite sprite, int hurtboxLayer, Fighter playerFighter, GameObject fireballPrefab)
         {
             var clips = LoadSamuraiClips();
             var dummy = new GameObject("Dummy");
@@ -193,6 +198,7 @@ namespace SamuraiFighter.EditorTools
             fSO.FindProperty("_facingRight").boolValue = false;
             fSO.FindProperty("_lightAttackHitbox").objectReferenceValue = lightHitbox;
             fSO.FindProperty("_heavyAttackHitbox").objectReferenceValue = heavyHitbox;
+            fSO.FindProperty("_fireballPrefab").objectReferenceValue = fireballPrefab;
             fSO.FindProperty("_health").objectReferenceValue = health;
             fSO.ApplyModifiedPropertiesWithoutUndo();
 
@@ -338,6 +344,76 @@ namespace SamuraiFighter.EditorTools
             bg.transform.localScale = new Vector3(scale, scale, 1f);
         }
 
+        private static GameObject EnsureFireballPrefab()
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
+                AssetDatabase.CreateFolder("Assets", "Prefabs");
+
+            var fireballSprite = EnsureFireballSpriteAsset();
+
+            var template = new GameObject("Fireball");
+            var sr = template.AddComponent<SpriteRenderer>();
+            sr.sprite = fireballSprite;
+            sr.color = new Color(1f, 0.55f, 0.1f);
+            sr.sortingOrder = 2;
+            template.transform.localScale = new Vector3(0.4f, 0.4f, 1f);
+
+            var rb = template.AddComponent<Rigidbody2D>();
+            rb.gravityScale = 0f;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+
+            var col = template.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+            col.radius = 0.45f;
+
+            template.AddComponent<Projectile>();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(template, FireballPrefabPath);
+            Object.DestroyImmediate(template);
+            return prefab;
+        }
+
+        private const string FireballSpritePath = "Assets/Art/Effects/Fireball.png";
+
+        private static Sprite EnsureFireballSpriteAsset()
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/Art/Effects"))
+                AssetDatabase.CreateFolder("Assets/Art", "Effects");
+
+            if (!System.IO.File.Exists(FireballSpritePath))
+            {
+                const int size = 16;
+                var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+                var px = new Color32[size * size];
+                float r = size * 0.5f - 0.5f;
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        float dx = x - r, dy = y - r;
+                        float d = Mathf.Sqrt(dx * dx + dy * dy) / r;
+                        byte a = (byte)(d <= 1f ? Mathf.Clamp01(1f - d * d) * 255f : 0);
+                        px[y * size + x] = new Color32(255, 255, 255, a);
+                    }
+                tex.SetPixels32(px);
+                tex.Apply();
+                System.IO.File.WriteAllBytes(FireballSpritePath, tex.EncodeToPNG());
+                Object.DestroyImmediate(tex);
+                AssetDatabase.ImportAsset(FireballSpritePath, ImportAssetOptions.ForceSynchronousImport);
+            }
+
+            var importer = AssetImporter.GetAtPath(FireballSpritePath) as TextureImporter;
+            if (importer != null)
+            {
+                importer.textureType = TextureImporterType.Sprite;
+                importer.spritePixelsPerUnit = 16f;
+                importer.filterMode = FilterMode.Point;
+                importer.alphaIsTransparency = true;
+                importer.mipmapEnabled = false;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Sprite>(FireballSpritePath);
+        }
+
         private static void BuildMatchController()
         {
             var go = new GameObject("MatchController");
@@ -360,6 +436,9 @@ namespace SamuraiFighter.EditorTools
             AddClip(list, "Assets/Art/Characters/Samurai1/Jump", FighterState.Jump, AttackKind.None, 12f, false);
             AddClip(list, "Assets/Art/Characters/Samurai1/LightAttack", FighterState.Attack, AttackKind.Light, 10f, false);
             AddClip(list, "Assets/Art/Characters/Samurai1/HeavyAttack", FighterState.Attack, AttackKind.Heavy, 10.5f, false);
+            AddClip(list, "Assets/Art/Characters/Samurai1/Fireball", FighterState.Attack, AttackKind.Fireball, 10f, false);
+            AddClip(list, "Assets/Art/Characters/Samurai1/TakingPunch", FighterState.Hit, AttackKind.None, 12f, false);
+            AddClip(list, "Assets/Art/Characters/Samurai1/Block", FighterState.Block, AttackKind.None, 10f, false);
             return list;
         }
 

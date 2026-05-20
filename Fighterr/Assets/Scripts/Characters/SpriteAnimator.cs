@@ -77,12 +77,15 @@ namespace SamuraiFighter.Characters
             {
                 case FighterState.Attack:
                 case FighterState.AirAttack:
-                case FighterState.Hit:
                 case FighterState.BlockStun:
                 case FighterState.KnockDown:
                 case FighterState.Crouch:
                 case FighterState.Dead:
                     return FighterState.Idle;
+                case FighterState.Hit:
+                    return FighterState.Hit;
+                case FighterState.Block:
+                    return FighterState.Block;
                 default:
                     return s;
             }

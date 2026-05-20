@@ -43,7 +43,10 @@ namespace SamuraiFighter.Combat
                 if (_alreadyHit.Contains(hurtbox)) continue;
                 _alreadyHit.Add(hurtbox);
 
-                if (hurtbox.Health != null) hurtbox.Health.TakeDamage(_damage);
+                int dmg = _damage;
+                if (hurtbox.Owner != null && hurtbox.Owner.IsBlocking)
+                    dmg = Mathf.Max(0, Mathf.RoundToInt(_damage * hurtbox.Owner.BlockDamageMultiplier));
+                if (hurtbox.Health != null && dmg > 0) hurtbox.Health.TakeDamage(dmg);
                 ApplyKnockback(hurtbox.Owner, facing);
                 HitstopController.Apply(_hitstopFrames);
                 HitFeedback.Spawn(center);
