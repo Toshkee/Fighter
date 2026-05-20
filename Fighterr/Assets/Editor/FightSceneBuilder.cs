@@ -44,10 +44,10 @@ namespace SamuraiFighter.EditorTools
             BuildBackground();
             BuildGround(whiteSprite, groundLayer);
             BuildWalls();
-            var (playerHealth, dummyHealth) = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
-            BuildHUD(whiteSprite, playerHealth, dummyHealth);
+            var fighters = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
+            var hud = BuildHUD(whiteSprite, fighters.playerHealth, fighters.dummyHealth, fighters.playerMeter, fighters.dummyMeter);
             FrameCamera();
-            BuildMatchController();
+            BuildMatchController(fighters, hud);
 
             if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
@@ -69,14 +69,30 @@ namespace SamuraiFighter.EditorTools
             ground.AddComponent<BoxCollider2D>();
         }
 
-        private static (Health player, Health dummy) BuildFighters(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
+        public struct FightersRefs
         {
-            var (pHealth, pFighter) = BuildPlayer(sprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
-            var d = BuildDummy(sprite, hurtboxLayer, pFighter, fireballPrefab);
-            return (pHealth, d);
+            public Health playerHealth;
+            public Fighter playerFighter;
+            public PlayerInputHandler playerInput;
+            public SuperMeter playerMeter;
+            public Health dummyHealth;
+            public Fighter dummyFighter;
+            public DummyAI dummyAI;
+            public SuperMeter dummyMeter;
         }
 
-        private static (Health health, Fighter fighter) BuildPlayer(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
+        private static FightersRefs BuildFighters(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
+        {
+            var (pHealth, pFighter, pInput, pMeter) = BuildPlayer(sprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
+            var (dHealth, dFighter, dAI, dMeter) = BuildDummy(sprite, hurtboxLayer, pFighter, fireballPrefab);
+            return new FightersRefs
+            {
+                playerHealth = pHealth, playerFighter = pFighter, playerInput = pInput, playerMeter = pMeter,
+                dummyHealth = dHealth, dummyFighter = dFighter, dummyAI = dAI, dummyMeter = dMeter
+            };
+        }
+
+        private static (Health health, Fighter fighter, PlayerInputHandler input, SuperMeter meter) BuildPlayer(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
         {
             var clips = LoadSamuraiClips();
             var player = new GameObject("Player");
@@ -101,6 +117,7 @@ namespace SamuraiFighter.EditorTools
             groundCheck.transform.localPosition = new Vector3(0f, -0.75f, 0f);
 
             var health = player.AddComponent<Health>();
+            var meter = player.AddComponent<SuperMeter>();
             AddHurtbox(player, hurtboxLayer);
 
             var lightGO = new GameObject("LightAttackHitbox");
@@ -127,6 +144,12 @@ namespace SamuraiFighter.EditorTools
             fSO.FindProperty("_heavyAttackHitbox").objectReferenceValue = heavyHitbox;
             fSO.FindProperty("_fireballPrefab").objectReferenceValue = fireballPrefab;
             fSO.FindProperty("_health").objectReferenceValue = health;
+            fSO.FindProperty("_superMeter").objectReferenceValue = meter;
+            var playerHitFlash = player.AddComponent<HitFlash>();
+            var playerFlashSO = new SerializedObject(playerHitFlash);
+            playerFlashSO.FindProperty("_renderer").objectReferenceValue = sr;
+            playerFlashSO.ApplyModifiedPropertiesWithoutUndo();
+            fSO.FindProperty("_hitFlash").objectReferenceValue = playerHitFlash;
             fSO.ApplyModifiedPropertiesWithoutUndo();
 
             ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, new Vector2(1.5f, 1f));
@@ -140,7 +163,7 @@ namespace SamuraiFighter.EditorTools
                 iSO.FindProperty("_actions").objectReferenceValue = actions;
                 iSO.ApplyModifiedPropertiesWithoutUndo();
             }
-            return (health, fighter);
+            return (health, fighter, input, meter);
         }
 
         private static void ConfigureHitbox(Hitbox hb, Fighter owner, int hurtboxLayer, Vector2 size)
@@ -152,7 +175,7 @@ namespace SamuraiFighter.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static Health BuildDummy(Sprite sprite, int hurtboxLayer, Fighter playerFighter, GameObject fireballPrefab)
+        private static (Health health, Fighter fighter, DummyAI ai, SuperMeter meter) BuildDummy(Sprite sprite, int hurtboxLayer, Fighter playerFighter, GameObject fireballPrefab)
         {
             var clips = LoadSamuraiClips();
             var dummy = new GameObject("Dummy");
@@ -173,6 +196,7 @@ namespace SamuraiFighter.EditorTools
             bodyCol.offset = new Vector2(0f, 0f);
 
             var health = dummy.AddComponent<Health>();
+            var meter = dummy.AddComponent<SuperMeter>();
             AddHurtbox(dummy, hurtboxLayer);
 
             var lightGO = new GameObject("LightAttackHitbox");
@@ -200,6 +224,12 @@ namespace SamuraiFighter.EditorTools
             fSO.FindProperty("_heavyAttackHitbox").objectReferenceValue = heavyHitbox;
             fSO.FindProperty("_fireballPrefab").objectReferenceValue = fireballPrefab;
             fSO.FindProperty("_health").objectReferenceValue = health;
+            fSO.FindProperty("_superMeter").objectReferenceValue = meter;
+            var dummyHitFlash = dummy.AddComponent<HitFlash>();
+            var dummyFlashSO = new SerializedObject(dummyHitFlash);
+            dummyFlashSO.FindProperty("_renderer").objectReferenceValue = sr;
+            dummyFlashSO.ApplyModifiedPropertiesWithoutUndo();
+            fSO.FindProperty("_hitFlash").objectReferenceValue = dummyHitFlash;
             fSO.ApplyModifiedPropertiesWithoutUndo();
 
             ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, new Vector2(1.5f, 1f));
@@ -214,7 +244,7 @@ namespace SamuraiFighter.EditorTools
             aiSO.ApplyModifiedPropertiesWithoutUndo();
 
             dummy.transform.localScale = new Vector3(-1f, 1f, 1f);
-            return health;
+            return (health, fighter, ai, meter);
         }
 
         private static void AddHurtbox(GameObject owner, int hurtboxLayer)
@@ -248,7 +278,15 @@ namespace SamuraiFighter.EditorTools
             col.size = Vector2.one;
         }
 
-        private static void BuildHUD(Sprite sprite, Health player, Health dummy)
+        public struct HUDRefs
+        {
+            public RoundTimer timer;
+            public Text banner;
+            public Image[] p1Pips;
+            public Image[] p2Pips;
+        }
+
+        private static HUDRefs BuildHUD(Sprite sprite, Health player, Health dummy, SuperMeter playerMeter, SuperMeter dummyMeter)
         {
             var canvasGO = new GameObject("HUD");
             var canvas = canvasGO.AddComponent<Canvas>();
@@ -259,6 +297,196 @@ namespace SamuraiFighter.EditorTools
 
             CreateHealthBar(canvasGO.transform, sprite, "P1Bar", player, new Vector2(40f, -40f), TextAnchor.UpperLeft, false);
             CreateHealthBar(canvasGO.transform, sprite, "P2Bar", dummy, new Vector2(-40f, -40f), TextAnchor.UpperRight, true);
+
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+            var timer = CreateRoundTimer(canvasGO.transform, font);
+
+            CreateComboCounter(canvasGO.transform, font, "P1Combo", dummy, new Vector2(60f, -100f), TextAnchor.UpperLeft, TextAnchor.UpperLeft);
+            CreateComboCounter(canvasGO.transform, font, "P2Combo", player, new Vector2(-60f, -100f), TextAnchor.UpperRight, TextAnchor.UpperRight);
+
+            var p1Pips = CreatePips(canvasGO.transform, sprite, "P1Pips", new Vector2(40f, -90f), TextAnchor.UpperLeft);
+            var p2Pips = CreatePips(canvasGO.transform, sprite, "P2Pips", new Vector2(-40f, -90f), TextAnchor.UpperRight);
+
+            CreateSuperBar(canvasGO.transform, sprite, "P1Super", playerMeter, new Vector2(40f, -130f), TextAnchor.UpperLeft, false);
+            CreateSuperBar(canvasGO.transform, sprite, "P2Super", dummyMeter, new Vector2(-40f, -130f), TextAnchor.UpperRight, true);
+
+            var banner = CreateBanner(canvasGO.transform, font);
+
+            return new HUDRefs { timer = timer, banner = banner, p1Pips = p1Pips, p2Pips = p2Pips };
+        }
+
+        private static void CreateSuperBar(Transform parent, Sprite sprite, string name, SuperMeter target, Vector2 offset, TextAnchor anchor, bool rightToLeft)
+        {
+            var bg = new GameObject(name);
+            bg.transform.SetParent(parent, false);
+            var bgRT = bg.AddComponent<RectTransform>();
+            var bgImg = bg.AddComponent<Image>();
+            bgImg.sprite = sprite;
+            bgImg.color = new Color(0.05f, 0.05f, 0.08f, 0.85f);
+
+            bgRT.sizeDelta = new Vector2(360f, 18f);
+            switch (anchor)
+            {
+                case TextAnchor.UpperLeft:
+                    bgRT.anchorMin = new Vector2(0f, 1f);
+                    bgRT.anchorMax = new Vector2(0f, 1f);
+                    bgRT.pivot = new Vector2(0f, 1f);
+                    break;
+                case TextAnchor.UpperRight:
+                    bgRT.anchorMin = new Vector2(1f, 1f);
+                    bgRT.anchorMax = new Vector2(1f, 1f);
+                    bgRT.pivot = new Vector2(1f, 1f);
+                    break;
+            }
+            bgRT.anchoredPosition = offset;
+
+            var fillGO = new GameObject("Fill");
+            fillGO.transform.SetParent(bg.transform, false);
+            var fillRT = fillGO.AddComponent<RectTransform>();
+            fillRT.anchorMin = Vector2.zero;
+            fillRT.anchorMax = Vector2.one;
+            fillRT.offsetMin = new Vector2(2f, 2f);
+            fillRT.offsetMax = new Vector2(-2f, -2f);
+            var fillImg = fillGO.AddComponent<Image>();
+            fillImg.sprite = sprite;
+            fillImg.color = new Color(0.85f, 0.6f, 1f);
+            fillImg.type = Image.Type.Filled;
+            fillImg.fillMethod = Image.FillMethod.Horizontal;
+            fillImg.fillOrigin = (int)(rightToLeft ? Image.OriginHorizontal.Right : Image.OriginHorizontal.Left);
+            fillImg.fillAmount = 0f;
+
+            var bar = bg.AddComponent<SuperMeterBar>();
+            bar.Bind(target, fillImg, rightToLeft);
+        }
+
+        private static Image[] CreatePips(Transform parent, Sprite sprite, string name, Vector2 offset, TextAnchor anchorCorner)
+        {
+            var container = new GameObject(name);
+            container.transform.SetParent(parent, false);
+            var crt = container.AddComponent<RectTransform>();
+            bool right = anchorCorner == TextAnchor.UpperRight;
+            crt.anchorMin = new Vector2(right ? 1f : 0f, 1f);
+            crt.anchorMax = new Vector2(right ? 1f : 0f, 1f);
+            crt.pivot = new Vector2(right ? 1f : 0f, 1f);
+            crt.anchoredPosition = offset;
+            crt.sizeDelta = new Vector2(120f, 30f);
+
+            var images = new Image[2];
+            float gap = 36f;
+            float pipSize = 24f;
+            for (int i = 0; i < 2; i++)
+            {
+                var go = new GameObject("Pip" + i);
+                go.transform.SetParent(container.transform, false);
+                var rt = go.AddComponent<RectTransform>();
+                rt.anchorMin = new Vector2(right ? 1f : 0f, 0.5f);
+                rt.anchorMax = new Vector2(right ? 1f : 0f, 0.5f);
+                rt.pivot = new Vector2(right ? 1f : 0f, 0.5f);
+                float x = (right ? -1f : 1f) * (i * gap);
+                rt.anchoredPosition = new Vector2(x, 0f);
+                rt.sizeDelta = new Vector2(pipSize, pipSize);
+                var img = go.AddComponent<Image>();
+                img.sprite = sprite;
+                img.color = new Color(0.25f, 0.25f, 0.3f, 0.8f);
+                images[i] = img;
+            }
+            return images;
+        }
+
+        private static Text CreateBanner(Transform parent, Font font)
+        {
+            var go = new GameObject("Banner");
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(0f, 60f);
+            rt.sizeDelta = new Vector2(1400f, 300f);
+
+            var text = go.AddComponent<Text>();
+            text.font = font;
+            text.text = "";
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = new Color(1f, 0.95f, 0.7f);
+            text.fontSize = 120;
+            text.fontStyle = FontStyle.Bold;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.enabled = false;
+            return text;
+        }
+
+        private static RoundTimer CreateRoundTimer(Transform parent, Font font)
+        {
+            var go = new GameObject("RoundTimer");
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 1f);
+            rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, -30f);
+            rt.sizeDelta = new Vector2(200f, 90f);
+
+            var text = go.AddComponent<Text>();
+            text.font = font;
+            text.text = "99";
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.fontSize = 72;
+            text.fontStyle = FontStyle.Bold;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+
+            var timer = go.AddComponent<RoundTimer>();
+            timer.Bind(text);
+            var tSO = new SerializedObject(timer);
+            tSO.FindProperty("_autoStart").boolValue = false;
+            tSO.ApplyModifiedPropertiesWithoutUndo();
+            return timer;
+        }
+
+        private static void CreateComboCounter(Transform parent, Font font, string name, Health watchedHealth, Vector2 offset, TextAnchor anchorCorner, TextAnchor textAlign)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            switch (anchorCorner)
+            {
+                case TextAnchor.UpperLeft:
+                    rt.anchorMin = new Vector2(0f, 1f);
+                    rt.anchorMax = new Vector2(0f, 1f);
+                    rt.pivot = new Vector2(0f, 1f);
+                    break;
+                case TextAnchor.UpperRight:
+                    rt.anchorMin = new Vector2(1f, 1f);
+                    rt.anchorMax = new Vector2(1f, 1f);
+                    rt.pivot = new Vector2(1f, 1f);
+                    break;
+            }
+            rt.anchoredPosition = offset;
+            rt.sizeDelta = new Vector2(400f, 60f);
+
+            var text = go.AddComponent<Text>();
+            text.font = font;
+            text.text = "";
+            text.alignment = textAlign == TextAnchor.UpperLeft ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
+            text.color = new Color(1f, 0.85f, 0.25f);
+            text.fontSize = 44;
+            text.fontStyle = FontStyle.Bold;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.enabled = false;
+
+            var tracker = go.AddComponent<ComboTracker>();
+            var tSO = new SerializedObject(tracker);
+            tSO.FindProperty("_target").objectReferenceValue = watchedHealth;
+            tSO.ApplyModifiedPropertiesWithoutUndo();
+
+            var counter = go.AddComponent<ComboCounter>();
+            counter.Bind(tracker, text);
         }
 
         private static void CreateHealthBar(Transform parent, Sprite sprite, string name, Health target, Vector2 offset, TextAnchor anchor, bool rightToLeft)
@@ -414,10 +642,12 @@ namespace SamuraiFighter.EditorTools
             return AssetDatabase.LoadAssetAtPath<Sprite>(FireballSpritePath);
         }
 
-        private static void BuildMatchController()
+        private static void BuildMatchController(FightersRefs f, HUDRefs h)
         {
             var go = new GameObject("MatchController");
-            go.AddComponent<MatchController>();
+            var mc = go.AddComponent<MatchController>();
+            mc.Configure(f.playerFighter, f.dummyFighter, f.playerHealth, f.dummyHealth,
+                         f.playerInput, f.dummyAI, h.timer, h.banner, h.p1Pips, h.p2Pips);
         }
 
         private static void AddSceneToBuildSettings(string path)
@@ -438,7 +668,7 @@ namespace SamuraiFighter.EditorTools
             AddClip(list, "Assets/Art/Characters/Samurai1/HeavyAttack", FighterState.Attack, AttackKind.Heavy, 10.5f, false);
             AddClip(list, "Assets/Art/Characters/Samurai1/Fireball", FighterState.Attack, AttackKind.Fireball, 10f, false);
             AddClip(list, "Assets/Art/Characters/Samurai1/TakingPunch", FighterState.Hit, AttackKind.None, 12f, false);
-            AddClip(list, "Assets/Art/Characters/Samurai1/Block", FighterState.Block, AttackKind.None, 10f, false);
+            AddClip(list, "Assets/Art/Characters/Samurai1/Block", FighterState.Block, AttackKind.None, 18f, false);
             return list;
         }
 

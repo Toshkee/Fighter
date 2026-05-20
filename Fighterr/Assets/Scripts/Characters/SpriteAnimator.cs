@@ -102,6 +102,11 @@ namespace SamuraiFighter.Characters
         {
             for (int i = 0; i < _clips.Count; i++)
                 if (_clips[i].state == FighterState.Attack && _clips[i].attackKind == kind) return _clips[i];
+            if (kind == AttackKind.Super)
+            {
+                for (int i = 0; i < _clips.Count; i++)
+                    if (_clips[i].state == FighterState.Attack && _clips[i].attackKind == AttackKind.Heavy) return _clips[i];
+            }
             return null;
         }
     }

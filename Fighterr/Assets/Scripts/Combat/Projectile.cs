@@ -49,6 +49,7 @@ namespace SamuraiFighter.Combat
                 if (rb != null) rb.linearVelocity = new Vector2(_direction * _knockback, rb.linearVelocity.y);
             }
             HitstopController.Apply(_hitstopFrames);
+            CameraShake.Shake(0.15f, 0.1f);
             HitFeedback.Spawn(transform.position);
             Destroy(gameObject);
         }

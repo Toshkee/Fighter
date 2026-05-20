@@ -8,6 +8,7 @@ namespace SamuraiFighter.Input
     public class PlayerInputHandler : MonoBehaviour
     {
         [SerializeField] private InputActionAsset _actions;
+        [SerializeField] private float _doubleTapWindow = 0.25f;
 
         private Fighter _fighter;
         private InputActionMap _map;
@@ -15,6 +16,11 @@ namespace SamuraiFighter.Input
         private InputAction _jump;
         private InputAction _attack;
         private InputAction _heavy;
+
+        private float _lastLeftTap = -10f;
+        private float _lastRightTap = -10f;
+        private bool _leftWasDown;
+        private bool _rightWasDown;
 
         private void Awake()
         {
@@ -58,7 +64,26 @@ namespace SamuraiFighter.Input
             if (kb != null)
             {
                 if (kb.fKey.wasPressedThisFrame) _fighter.TryFireball();
+                if (kb.qKey.wasPressedThisFrame) _fighter.TrySuper();
                 _fighter.SetBlockInput(kb.gKey.isPressed);
+
+                bool leftDown = kb.aKey.isPressed || kb.leftArrowKey.isPressed;
+                bool rightDown = kb.dKey.isPressed || kb.rightArrowKey.isPressed;
+                if (leftDown && !_leftWasDown)
+                {
+                    if (Time.time - _lastLeftTap <= _doubleTapWindow) _fighter.TryDash(-1f);
+                    _lastLeftTap = Time.time;
+                }
+                if (rightDown && !_rightWasDown)
+                {
+                    if (Time.time - _lastRightTap <= _doubleTapWindow) _fighter.TryDash(1f);
+                    _lastRightTap = Time.time;
+                }
+                _leftWasDown = leftDown;
+                _rightWasDown = rightDown;
+
+                if (kb.leftShiftKey.wasPressedThisFrame || kb.rightShiftKey.wasPressedThisFrame)
+                    _fighter.TryDash(v.x);
             }
         }
 

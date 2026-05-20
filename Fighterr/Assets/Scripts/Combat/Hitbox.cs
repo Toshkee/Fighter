@@ -41,14 +41,27 @@ namespace SamuraiFighter.Combat
                 if (hurtbox == null) continue;
                 if (hurtbox.Owner == _owner) continue;
                 if (_alreadyHit.Contains(hurtbox)) continue;
+                if (hurtbox.Owner != null && hurtbox.Owner.IsInvulnerable) continue;
                 _alreadyHit.Add(hurtbox);
+
+                if (hurtbox.Owner != null && hurtbox.Owner.IsParrying)
+                {
+                    HitstopController.Apply(Mathf.Max(_hitstopFrames * 2, 18));
+                    CameraShake.Shake(0.25f, 0.18f);
+                    HitFeedback.Spawn(center);
+                    if (_owner != null) _owner.ApplyParryStun();
+                    _activeFrames = 0;
+                    return;
+                }
 
                 int dmg = _damage;
                 if (hurtbox.Owner != null && hurtbox.Owner.IsBlocking)
                     dmg = Mathf.Max(0, Mathf.RoundToInt(_damage * hurtbox.Owner.BlockDamageMultiplier));
                 if (hurtbox.Health != null && dmg > 0) hurtbox.Health.TakeDamage(dmg);
+                if (dmg > 0 && _owner != null) _owner.NotifyHitLanded();
                 ApplyKnockback(hurtbox.Owner, facing);
                 HitstopController.Apply(_hitstopFrames);
+                CameraShake.Shake(0.12f, 0.08f + 0.004f * _damage);
                 HitFeedback.Spawn(center);
             }
 

@@ -27,5 +27,10 @@ namespace SamuraiFighter.Combat
             OnDamaged?.Invoke(amount);
             if (_currentHP == 0) OnDied?.Invoke();
         }
+
+        public void ResetHealth()
+        {
+            _currentHP = _maxHP;
+        }
     }
 }
