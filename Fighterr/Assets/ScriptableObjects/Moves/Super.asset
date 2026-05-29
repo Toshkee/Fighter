@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d28853fb4c90a4de8b0eeeb65646e757, type: 3}
+  m_Name: Super
+  m_EditorClassIdentifier: Assembly-CSharp::SamuraiFighter.Combat.MoveData
+  moveName: Super
+  attackKind: 4
+  delivery: 0
+  hitboxSlot: 1
+  startup: 8
+  active: 10
+  recovery: 24
+  damage: 35
+  knockback: 9
+  hitstopFrames: 14
+  comboDamageBonus: 1
+  comboStartupReduction: 0
+  comboMinStartup: 2
+  superCost: 100
+  superFlashDuration: 0.45
+  projectilePrefab: {fileID: 0}

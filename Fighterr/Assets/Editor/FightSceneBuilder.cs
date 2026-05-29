@@ -19,8 +19,18 @@ namespace SamuraiFighter.EditorTools
         private const string ScenePath = "Assets/Scenes/Fight.unity";
         private const string InputActionsPath = "Assets/InputSystem_Actions.inputactions";
         private const string FireballPrefabPath = "Assets/Prefabs/Fireball.prefab";
+        private const string MovesFolder = "Assets/ScriptableObjects/Moves";
+        private const string CharactersFolder = "Assets/ScriptableObjects/Characters";
         private const string GroundLayerName = "Ground";
         private const string HurtboxLayerName = "Hurtbox";
+
+        public struct MoveSet
+        {
+            public MoveData light;
+            public MoveData heavy;
+            public MoveData super;
+            public MoveData fireball;
+        }
 
         [MenuItem("Fighter/Build Fight Scene")]
         public static void Build()
@@ -37,6 +47,10 @@ namespace SamuraiFighter.EditorTools
             }
 
             var fireballPrefab = EnsureFireballPrefab();
+            var kenshinMoves = EnsureKenshinMoves(fireballPrefab);
+            var yoriMoves = EnsureYoriMoves(fireballPrefab);
+            var kenshin = EnsureKenshinCharacter(kenshinMoves);
+            var yori = EnsureYoriCharacter(yoriMoves);
 
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             var whiteSprite = CreateWhiteSprite();
@@ -44,7 +58,7 @@ namespace SamuraiFighter.EditorTools
             BuildBackground();
             BuildGround(whiteSprite, groundLayer);
             BuildWalls();
-            var fighters = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
+            var fighters = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions, kenshin, yori);
             var hud = BuildHUD(whiteSprite, fighters.playerHealth, fighters.dummyHealth, fighters.playerMeter, fighters.dummyMeter);
             FrameCamera();
             BuildMatchController(fighters, hud);
@@ -81,10 +95,10 @@ namespace SamuraiFighter.EditorTools
             public SuperMeter dummyMeter;
         }
 
-        private static FightersRefs BuildFighters(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
+        private static FightersRefs BuildFighters(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, CharacterData playerChar, CharacterData dummyChar)
         {
-            var (pHealth, pFighter, pInput, pMeter) = BuildPlayer(sprite, groundLayer, hurtboxLayer, actions, fireballPrefab);
-            var (dHealth, dFighter, dAI, dMeter) = BuildDummy(sprite, hurtboxLayer, pFighter, fireballPrefab);
+            var (pHealth, pFighter, pInput, pMeter) = BuildPlayer(sprite, groundLayer, hurtboxLayer, actions, playerChar);
+            var (dHealth, dFighter, dAI, dMeter) = BuildDummy(sprite, hurtboxLayer, pFighter, dummyChar);
             return new FightersRefs
             {
                 playerHealth = pHealth, playerFighter = pFighter, playerInput = pInput, playerMeter = pMeter,
@@ -92,15 +106,15 @@ namespace SamuraiFighter.EditorTools
             };
         }
 
-        private static (Health health, Fighter fighter, PlayerInputHandler input, SuperMeter meter) BuildPlayer(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, GameObject fireballPrefab)
+        private static (Health health, Fighter fighter, PlayerInputHandler input, SuperMeter meter) BuildPlayer(Sprite sprite, int groundLayer, int hurtboxLayer, InputActionAsset actions, CharacterData character)
         {
             var clips = LoadSamuraiClips();
-            var player = new GameObject("Player");
+            var player = new GameObject("Player_" + character.displayName);
             player.transform.position = new Vector3(-2.5f, 0f, 0f);
             player.transform.localScale = Vector3.one;
             var sr = player.AddComponent<SpriteRenderer>();
             sr.sprite = FirstSprite(clips) ?? sprite;
-            sr.color = Color.white;
+            sr.color = character.tint;
             sr.sortingOrder = 1;
 
             var rb = player.AddComponent<Rigidbody2D>();
@@ -136,13 +150,12 @@ namespace SamuraiFighter.EditorTools
             var fSO = new SerializedObject(fighter);
             fSO.FindProperty("_groundCheck").objectReferenceValue = groundCheck.transform;
             fSO.FindProperty("_groundLayer").intValue = 1 << groundLayer;
-            fSO.FindProperty("_walkSpeed").floatValue = 5f;
-            fSO.FindProperty("_jumpForce").floatValue = 8f;
+            fSO.FindProperty("_walkSpeed").floatValue = character.walkSpeed;
+            fSO.FindProperty("_jumpForce").floatValue = character.jumpForce;
             fSO.FindProperty("_groundCheckRadius").floatValue = 0.15f;
             fSO.FindProperty("_facingRight").boolValue = true;
             fSO.FindProperty("_lightAttackHitbox").objectReferenceValue = lightHitbox;
             fSO.FindProperty("_heavyAttackHitbox").objectReferenceValue = heavyHitbox;
-            fSO.FindProperty("_fireballPrefab").objectReferenceValue = fireballPrefab;
             fSO.FindProperty("_health").objectReferenceValue = health;
             fSO.FindProperty("_superMeter").objectReferenceValue = meter;
             var playerHitFlash = player.AddComponent<HitFlash>();
@@ -151,9 +164,11 @@ namespace SamuraiFighter.EditorTools
             playerFlashSO.ApplyModifiedPropertiesWithoutUndo();
             fSO.FindProperty("_hitFlash").objectReferenceValue = playerHitFlash;
             fSO.ApplyModifiedPropertiesWithoutUndo();
+            fighter.AssignMoves(character.light, character.heavy, character.super, character.fireball);
+            EditorUtility.SetDirty(fighter);
 
-            ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, new Vector2(1.5f, 1f));
-            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, new Vector2(1.9f, 1.1f));
+            ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, character.lightHitboxSize);
+            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, character.heavyHitboxSize);
 
             AttachSpriteAnimator(player, sr, fighter, clips);
 
@@ -175,15 +190,15 @@ namespace SamuraiFighter.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static (Health health, Fighter fighter, DummyAI ai, SuperMeter meter) BuildDummy(Sprite sprite, int hurtboxLayer, Fighter playerFighter, GameObject fireballPrefab)
+        private static (Health health, Fighter fighter, DummyAI ai, SuperMeter meter) BuildDummy(Sprite sprite, int hurtboxLayer, Fighter playerFighter, CharacterData character)
         {
             var clips = LoadSamuraiClips();
-            var dummy = new GameObject("Dummy");
+            var dummy = new GameObject("Dummy_" + character.displayName);
             dummy.transform.position = new Vector3(2.5f, 0f, 0f);
             dummy.transform.localScale = Vector3.one;
             var sr = dummy.AddComponent<SpriteRenderer>();
             sr.sprite = FirstSprite(clips) ?? sprite;
-            sr.color = new Color(0.75f, 0.85f, 1f);
+            sr.color = character.tint;
             sr.sortingOrder = 1;
 
             var rb = dummy.AddComponent<Rigidbody2D>();
@@ -216,13 +231,12 @@ namespace SamuraiFighter.EditorTools
             var fSO = new SerializedObject(fighter);
             fSO.FindProperty("_groundCheck").objectReferenceValue = groundCheck.transform;
             fSO.FindProperty("_groundLayer").intValue = 1 << LayerMask.NameToLayer(GroundLayerName);
-            fSO.FindProperty("_walkSpeed").floatValue = 4f;
-            fSO.FindProperty("_jumpForce").floatValue = 8f;
+            fSO.FindProperty("_walkSpeed").floatValue = character.walkSpeed;
+            fSO.FindProperty("_jumpForce").floatValue = character.jumpForce;
             fSO.FindProperty("_groundCheckRadius").floatValue = 0.15f;
             fSO.FindProperty("_facingRight").boolValue = false;
             fSO.FindProperty("_lightAttackHitbox").objectReferenceValue = lightHitbox;
             fSO.FindProperty("_heavyAttackHitbox").objectReferenceValue = heavyHitbox;
-            fSO.FindProperty("_fireballPrefab").objectReferenceValue = fireballPrefab;
             fSO.FindProperty("_health").objectReferenceValue = health;
             fSO.FindProperty("_superMeter").objectReferenceValue = meter;
             var dummyHitFlash = dummy.AddComponent<HitFlash>();
@@ -231,9 +245,11 @@ namespace SamuraiFighter.EditorTools
             dummyFlashSO.ApplyModifiedPropertiesWithoutUndo();
             fSO.FindProperty("_hitFlash").objectReferenceValue = dummyHitFlash;
             fSO.ApplyModifiedPropertiesWithoutUndo();
+            fighter.AssignMoves(character.light, character.heavy, character.super, character.fireball);
+            EditorUtility.SetDirty(fighter);
 
-            ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, new Vector2(1.5f, 1f));
-            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, new Vector2(1.9f, 1.1f));
+            ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, character.lightHitboxSize);
+            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, character.heavyHitboxSize);
 
             AttachSpriteAnimator(dummy, sr, fighter, clips);
 
@@ -640,6 +656,180 @@ namespace SamuraiFighter.EditorTools
                 importer.SaveAndReimport();
             }
             return AssetDatabase.LoadAssetAtPath<Sprite>(FireballSpritePath);
+        }
+
+        private static MoveSet EnsureKenshinMoves(GameObject fireballPrefab)
+        {
+            EnsureFolder("Assets/ScriptableObjects");
+            EnsureFolder(MovesFolder);
+
+            var light = LoadOrCreateMove("Kenshin_Light", m =>
+            {
+                m.attackKind = AttackKind.Light;
+                m.delivery = MoveDelivery.Hitbox;
+                m.hitboxSlot = HitboxSlot.Light;
+                m.startup = 5; m.active = 3; m.recovery = 10;
+                m.damage = 8; m.knockback = 7f; m.hitstopFrames = 7;
+                m.comboDamageBonus = 1.25f; m.comboStartupReduction = 2; m.comboMinStartup = 2;
+            });
+            var heavy = LoadOrCreateMove("Kenshin_Heavy", m =>
+            {
+                m.attackKind = AttackKind.Heavy;
+                m.delivery = MoveDelivery.Hitbox;
+                m.hitboxSlot = HitboxSlot.Heavy;
+                m.startup = 14; m.active = 4; m.recovery = 22;
+                m.damage = 18; m.knockback = 13f; m.hitstopFrames = 12;
+                m.comboDamageBonus = 1.5f; m.comboStartupReduction = 4; m.comboMinStartup = 4;
+            });
+            var super = LoadOrCreateMove("Kenshin_Super", m =>
+            {
+                m.attackKind = AttackKind.Super;
+                m.delivery = MoveDelivery.Hitbox;
+                m.hitboxSlot = HitboxSlot.Heavy;
+                m.startup = 8; m.active = 10; m.recovery = 24;
+                m.damage = 35; m.knockback = 9f; m.hitstopFrames = 14;
+                m.superCost = 100; m.superFlashDuration = 0.45f;
+            });
+            var fireball = LoadOrCreateMove("Kenshin_Fireball", m =>
+            {
+                m.attackKind = AttackKind.Fireball;
+                m.delivery = MoveDelivery.Projectile;
+                m.startup = 12; m.active = 2; m.recovery = 20;
+                m.projectilePrefab = fireballPrefab;
+            });
+            EnsureProjectilePrefab(fireball, fireballPrefab);
+            AssetDatabase.SaveAssets();
+            return new MoveSet { light = light, heavy = heavy, super = super, fireball = fireball };
+        }
+
+        private static MoveSet EnsureYoriMoves(GameObject fireballPrefab)
+        {
+            EnsureFolder("Assets/ScriptableObjects");
+            EnsureFolder(MovesFolder);
+
+            // Yori — long-reach naginata zoner: slower startup, more damage and knockback.
+            var light = LoadOrCreateMove("Yori_Light", m =>
+            {
+                m.attackKind = AttackKind.Light;
+                m.delivery = MoveDelivery.Hitbox;
+                m.hitboxSlot = HitboxSlot.Light;
+                m.startup = 9; m.active = 4; m.recovery = 14;
+                m.damage = 12; m.knockback = 8f; m.hitstopFrames = 8;
+                m.comboDamageBonus = 1.2f; m.comboStartupReduction = 2; m.comboMinStartup = 4;
+            });
+            var heavy = LoadOrCreateMove("Yori_Heavy", m =>
+            {
+                m.attackKind = AttackKind.Heavy;
+                m.delivery = MoveDelivery.Hitbox;
+                m.hitboxSlot = HitboxSlot.Heavy;
+                m.startup = 20; m.active = 5; m.recovery = 26;
+                m.damage = 26; m.knockback = 16f; m.hitstopFrames = 14;
+                m.comboDamageBonus = 1.4f; m.comboStartupReduction = 5; m.comboMinStartup = 8;
+            });
+            var super = LoadOrCreateMove("Yori_Super", m =>
+            {
+                m.attackKind = AttackKind.Super;
+                m.delivery = MoveDelivery.Hitbox;
+                m.hitboxSlot = HitboxSlot.Heavy;
+                m.startup = 14; m.active = 12; m.recovery = 28;
+                m.damage = 42; m.knockback = 12f; m.hitstopFrames = 16;
+                m.superCost = 100; m.superFlashDuration = 0.5f;
+            });
+            var fireball = LoadOrCreateMove("Yori_Fireball", m =>
+            {
+                m.attackKind = AttackKind.Fireball;
+                m.delivery = MoveDelivery.Projectile;
+                m.startup = 18; m.active = 2; m.recovery = 24;
+                m.projectilePrefab = fireballPrefab;
+            });
+            EnsureProjectilePrefab(fireball, fireballPrefab);
+            AssetDatabase.SaveAssets();
+            return new MoveSet { light = light, heavy = heavy, super = super, fireball = fireball };
+        }
+
+        private static void EnsureProjectilePrefab(MoveData move, GameObject prefab)
+        {
+            if (move.projectilePrefab != prefab)
+            {
+                move.projectilePrefab = prefab;
+                EditorUtility.SetDirty(move);
+            }
+        }
+
+        private static CharacterData EnsureKenshinCharacter(MoveSet moves)
+        {
+            EnsureFolder(CharactersFolder);
+            return LoadOrCreateCharacter("Kenshin", c =>
+            {
+                c.displayName = "Kenshin";
+                c.tint = Color.white;
+                c.walkSpeed = 5f;
+                c.jumpForce = 8f;
+                c.lightHitboxSize = new Vector2(1.5f, 1f);
+                c.heavyHitboxSize = new Vector2(1.9f, 1.1f);
+            }, moves);
+        }
+
+        private static CharacterData EnsureYoriCharacter(MoveSet moves)
+        {
+            EnsureFolder(CharactersFolder);
+            return LoadOrCreateCharacter("Yori", c =>
+            {
+                c.displayName = "Yori";
+                c.tint = new Color(0.85f, 0.55f, 1f);
+                c.walkSpeed = 4f;
+                c.jumpForce = 7.5f;
+                c.lightHitboxSize = new Vector2(2.2f, 1f);
+                c.heavyHitboxSize = new Vector2(2.9f, 1.1f);
+            }, moves);
+        }
+
+        private static CharacterData LoadOrCreateCharacter(string name, System.Action<CharacterData> configure, MoveSet moves)
+        {
+            string path = $"{CharactersFolder}/{name}.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<CharacterData>(path);
+            CharacterData asset = existing;
+            if (asset == null)
+            {
+                asset = ScriptableObject.CreateInstance<CharacterData>();
+                configure(asset);
+                AssetDatabase.CreateAsset(asset, path);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+                asset = AssetDatabase.LoadAssetAtPath<CharacterData>(path);
+            }
+            // Always re-bind move refs so tuning the move file is reflected even on existing chars.
+            asset.light = moves.light;
+            asset.heavy = moves.heavy;
+            asset.super = moves.super;
+            asset.fireball = moves.fireball;
+            EditorUtility.SetDirty(asset);
+            AssetDatabase.SaveAssets();
+            return asset;
+        }
+
+        private static MoveData LoadOrCreateMove(string name, System.Action<MoveData> configure)
+        {
+            string path = $"{MovesFolder}/{name}.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<MoveData>(path);
+            if (existing != null) return existing;
+            var asset = ScriptableObject.CreateInstance<MoveData>();
+            asset.moveName = name;
+            configure(asset);
+            AssetDatabase.CreateAsset(asset, path);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            return AssetDatabase.LoadAssetAtPath<MoveData>(path);
+        }
+
+        private static void EnsureFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path)) return;
+            int slash = path.LastIndexOf('/');
+            var parent = path.Substring(0, slash);
+            var leaf = path.Substring(slash + 1);
+            if (!AssetDatabase.IsValidFolder(parent)) EnsureFolder(parent);
+            AssetDatabase.CreateFolder(parent, leaf);
         }
 
         private static void BuildMatchController(FightersRefs f, HUDRefs h)

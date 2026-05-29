@@ -33,29 +33,15 @@ namespace SamuraiFighter.Characters
         [Header("Facing")]
         [SerializeField] private bool _facingRight = true;
 
-        [Header("Light Attack")]
+        [Header("Hitbox slots (scene refs)")]
         [SerializeField] private Hitbox _lightAttackHitbox;
-        [SerializeField] private int _lightStartup = 5;
-        [SerializeField] private int _lightActive = 3;
-        [SerializeField] private int _lightRecovery = 10;
-        [SerializeField] private int _lightDamage = 8;
-        [SerializeField] private float _lightKnockback = 7f;
-        [SerializeField] private int _lightHitstopFrames = 7;
-
-        [Header("Heavy Attack")]
         [SerializeField] private Hitbox _heavyAttackHitbox;
-        [SerializeField] private int _heavyStartup = 14;
-        [SerializeField] private int _heavyActive = 4;
-        [SerializeField] private int _heavyRecovery = 22;
-        [SerializeField] private int _heavyDamage = 18;
-        [SerializeField] private float _heavyKnockback = 13f;
-        [SerializeField] private int _heavyHitstopFrames = 12;
 
-        [Header("Fireball")]
-        [SerializeField] private GameObject _fireballPrefab;
-        [SerializeField] private int _fireballStartup = 12;
-        [SerializeField] private int _fireballActive = 2;
-        [SerializeField] private int _fireballRecovery = 20;
+        [Header("Moves (ScriptableObjects)")]
+        [SerializeField] private MoveData _lightMove;
+        [SerializeField] private MoveData _heavyMove;
+        [SerializeField] private MoveData _superMove;
+        [SerializeField] private MoveData _fireballMove;
 
         [Header("Hit Reaction")]
         [SerializeField] private int _hitstunFrames = 18;
@@ -68,8 +54,6 @@ namespace SamuraiFighter.Characters
 
         [Header("Combo")]
         [SerializeField] private int _comboWindowFrames = 22;
-        [SerializeField] private float _comboLightBonus = 1.25f;
-        [SerializeField] private float _comboHeavyBonus = 1.5f;
 
         [Header("Block")]
         [SerializeField, Range(0f, 1f)] private float _blockDamageMultiplier = 0.25f;
@@ -77,15 +61,7 @@ namespace SamuraiFighter.Characters
         [SerializeField] private int _parryStunFrames = 30;
         [SerializeField] private int _parryCooldownFrames = 45;
 
-        [Header("Super")]
-        [SerializeField] private int _superDamage = 35;
-        [SerializeField] private float _superKnockback = 9f;
-        [SerializeField] private int _superHitstopFrames = 14;
-        [SerializeField] private int _superStartup = 8;
-        [SerializeField] private int _superActive = 10;
-        [SerializeField] private int _superRecovery = 24;
-        [SerializeField] private int _superCost = 100;
-        [SerializeField] private float _superFlashDuration = 0.45f;
+        [Header("Super meter gain")]
         [SerializeField] private int _meterGainOnHitLanded = 35;
         [SerializeField] private int _meterGainOnHitTaken = 22;
 
@@ -219,6 +195,14 @@ namespace SamuraiFighter.Characters
             if (_health != null) _health.ResetHealth();
         }
 
+        public void AssignMoves(MoveData light, MoveData heavy, MoveData super, MoveData fireball)
+        {
+            _lightMove = light;
+            _heavyMove = heavy;
+            _superMove = super;
+            _fireballMove = fireball;
+        }
+
         public void SetMoveInput(float horizontal) => _moveInput = horizontal;
         public void SetJumpInput(bool pressed) => _jumpPressed = pressed;
         public void SetCrouchInput(bool held) => _crouchHeld = held;
@@ -240,31 +224,30 @@ namespace SamuraiFighter.Characters
         private float _activeKnockback;
         private int _activeHitstop;
 
-        public void TryLightAttack()
+        public void TryLightAttack() => TryHitboxMove(_lightMove);
+        public void TryHeavyAttack() => TryHitboxMove(_heavyMove);
+
+        private void TryHitboxMove(MoveData move)
         {
-            int dmg = _lightDamage;
-            int startup = _lightStartup;
-            if (_comboWindow > 0 && _comboStep >= 1)
+            if (move == null) return;
+            int dmg = move.damage;
+            int startup = move.startup;
+            if (_comboWindow > 0 && _comboStep >= 1 && (move.comboDamageBonus > 1f || move.comboStartupReduction > 0))
             {
-                dmg = Mathf.RoundToInt(_lightDamage * _comboLightBonus);
-                startup = Mathf.Max(2, _lightStartup - 2);
+                dmg = Mathf.RoundToInt(move.damage * move.comboDamageBonus);
+                startup = Mathf.Max(move.comboMinStartup, move.startup - move.comboStartupReduction);
             }
-            StartAttack(AttackKind.Light, _lightAttackHitbox, startup, _lightActive, _lightRecovery,
-                        dmg, _lightKnockback, _lightHitstopFrames);
+            StartAttack(move.attackKind, ResolveHitbox(move.hitboxSlot), startup, move.active, move.recovery,
+                        dmg, move.knockback, move.hitstopFrames);
         }
 
-        public void TryHeavyAttack()
+        private Hitbox ResolveHitbox(HitboxSlot slot)
         {
-            var hb = _heavyAttackHitbox != null ? _heavyAttackHitbox : _lightAttackHitbox;
-            int dmg = _heavyDamage;
-            int startup = _heavyStartup;
-            if (_comboWindow > 0 && _comboStep >= 1)
+            switch (slot)
             {
-                dmg = Mathf.RoundToInt(_heavyDamage * _comboHeavyBonus);
-                startup = Mathf.Max(4, _heavyStartup - 4);
+                case HitboxSlot.Heavy: return _heavyAttackHitbox != null ? _heavyAttackHitbox : _lightAttackHitbox;
+                default: return _lightAttackHitbox;
             }
-            StartAttack(AttackKind.Heavy, hb, startup, _heavyActive, _heavyRecovery,
-                        dmg, _heavyKnockback, _heavyHitstopFrames);
         }
 
         public bool TryDash(float direction)
@@ -286,32 +269,35 @@ namespace SamuraiFighter.Characters
 
         public bool TrySuper()
         {
+            if (_superMove == null) return false;
             if (IsDead || IsAttacking || IsHit || IsBlocking || !_isGrounded) return false;
-            if (_superMeter == null || _superMeter.Current < _superCost) return false;
-            _superMeter.Drain(_superCost);
-            var hb = _heavyAttackHitbox != null ? _heavyAttackHitbox : _lightAttackHitbox;
-            StartAttack(AttackKind.Super, hb, _superStartup, _superActive, _superRecovery,
-                        _superDamage, _superKnockback, _superHitstopFrames);
-            SuperFlash.Trigger(_superFlashDuration, null);
+            if (_superMeter == null || _superMeter.Current < _superMove.superCost) return false;
+            _superMeter.Drain(_superMove.superCost);
+            StartAttack(AttackKind.Super, ResolveHitbox(_superMove.hitboxSlot),
+                        _superMove.startup, _superMove.active, _superMove.recovery,
+                        _superMove.damage, _superMove.knockback, _superMove.hitstopFrames);
+            SuperFlash.Trigger(_superMove.superFlashDuration, null);
             return true;
         }
 
         public void TryFireball()
         {
-            if (IsDead || IsAttacking || IsHit || IsBlocking || !_isGrounded || _fireballPrefab == null) return;
+            if (_fireballMove == null || _fireballMove.projectilePrefab == null) return;
+            if (IsDead || IsAttacking || IsHit || IsBlocking || !_isGrounded) return;
             _currentState = FighterState.Attack;
             _currentAttackKind = AttackKind.Fireball;
             _attackFrame = 0;
-            _attackTotal = _fireballStartup + _fireballActive + _fireballRecovery;
+            _attackTotal = _fireballMove.startup + _fireballMove.active + _fireballMove.recovery;
             _hitboxFired = false;
             _activeHitbox = null;
-            _activeStartup = _fireballStartup;
-            _activeActiveFrames = _fireballActive;
+            _activeStartup = _fireballMove.startup;
+            _activeActiveFrames = _fireballMove.active;
         }
 
         private void SpawnFireball()
         {
-            var go = Instantiate(_fireballPrefab, transform.position + new Vector3(_facingRight ? 0.6f : -0.6f, 0.1f, 0f), Quaternion.identity);
+            if (_fireballMove == null || _fireballMove.projectilePrefab == null) return;
+            var go = Instantiate(_fireballMove.projectilePrefab, transform.position + new Vector3(_facingRight ? 0.6f : -0.6f, 0.1f, 0f), Quaternion.identity);
             var proj = go.GetComponent<Projectile>();
             if (proj != null) proj.Launch(this, _facingRight ? 1f : -1f);
         }
