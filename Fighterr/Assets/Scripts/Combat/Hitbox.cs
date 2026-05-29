@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 using SamuraiFighter.Characters;
+using SamuraiFighter.Managers;
+using SamuraiFighter.Utils;
 
 namespace SamuraiFighter.Combat
 {
@@ -9,6 +11,7 @@ namespace SamuraiFighter.Combat
         [SerializeField] private Fighter _owner;
         [SerializeField] private Vector2 _size = new Vector2(1.5f, 1f);
         [SerializeField] private LayerMask _hurtboxLayer;
+        [SerializeField] private bool _heavyImpact;
 
         private int _activeFrames;
         private int _damage;
@@ -17,6 +20,8 @@ namespace SamuraiFighter.Combat
         private readonly HashSet<Hurtbox> _alreadyHit = new();
 
         public bool IsActive => _activeFrames > 0;
+
+        public void SetSize(Vector2 size) => _size = size;
 
         public void Activate(int frames, int damage, float knockback, int hitstopFrames)
         {
@@ -48,21 +53,40 @@ namespace SamuraiFighter.Combat
                 {
                     HitstopController.Apply(Mathf.Max(_hitstopFrames * 2, 18));
                     CameraShake.Shake(0.25f, 0.18f);
-                    HitFeedback.Spawn(center);
+                    Vfx.Parry(center);
+                    AudioManager.Play(SfxId.Parry);
                     if (_owner != null) _owner.ApplyParryStun();
                     _activeFrames = 0;
                     return;
                 }
 
+                bool blocked = hurtbox.Owner != null && hurtbox.Owner.IsBlocking;
                 int dmg = _damage;
-                if (hurtbox.Owner != null && hurtbox.Owner.IsBlocking)
+                if (blocked)
                     dmg = Mathf.Max(0, Mathf.RoundToInt(_damage * hurtbox.Owner.BlockDamageMultiplier));
                 if (hurtbox.Health != null && dmg > 0) hurtbox.Health.TakeDamage(dmg);
                 if (dmg > 0 && _owner != null) _owner.NotifyHitLanded();
                 ApplyKnockback(hurtbox.Owner, facing);
-                HitstopController.Apply(_hitstopFrames);
-                CameraShake.Shake(0.12f, 0.08f + 0.004f * _damage);
-                HitFeedback.Spawn(center);
+
+                if (blocked)
+                {
+                    HitstopController.Apply(Mathf.Max(2, _hitstopFrames / 2));
+                    CameraShake.Shake(0.06f, 0.05f);
+                    Vfx.Block(center, facing);
+                    AudioManager.Play(SfxId.Block);
+                    FloatingText.Label(center, "GUARD", new Color(0.6f, 0.85f, 1f), 0.1f);
+                }
+                else
+                {
+                    HitstopController.Apply(_hitstopFrames);
+                    CameraShake.Shake(0.12f, 0.08f + 0.004f * _damage);
+                    if (_heavyImpact && BattleCamera.Instance != null) BattleCamera.Instance.AddPunch(0.9f);
+                    float intensity = _heavyImpact ? 1.3f : 0.85f;
+                    Vfx.Hit(center, facing, intensity);
+                    FloatingText.Damage(center, _damage, _heavyImpact);
+                    int comboStep = _owner != null ? _owner.ComboStep : 0;
+                    AudioManager.PlayHit(_heavyImpact, comboStep);
+                }
             }
 
             _activeFrames--;

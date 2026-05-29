@@ -5,7 +5,9 @@ using UnityEngine.UI;
 using SamuraiFighter.Characters;
 using SamuraiFighter.Combat;
 using SamuraiFighter.Input;
+using SamuraiFighter.Managers;
 using SamuraiFighter.UI;
+using SamuraiFighter.Utils;
 
 namespace SamuraiFighter.Match
 {
@@ -34,17 +36,33 @@ namespace SamuraiFighter.Match
         private enum Phase { Intro, InRound, RoundEnd, MatchEnd }
         private Phase _phase;
         private float _phaseTimer;
+        private float _fightBannerTimer;
+        private bool _introSwitched;
         private int _p1Wins;
         private int _p2Wins;
         private int _roundNumber;
+        private string _p1Name = "PLAYER";
+        private string _p2Name = "CPU";
 
         private void Start()
         {
             _p1Wins = 0;
             _p2Wins = 0;
             _roundNumber = 0;
+            ResolveNames();
             UpdatePips();
+            AudioManager.Prewarm();
             BeginIntro();
+        }
+
+        private void ResolveNames()
+        {
+            var s = GameSession.Instance;
+            if (s == null) return;
+            if (s.P1Character != null && !string.IsNullOrEmpty(s.P1Character.displayName))
+                _p1Name = s.P1Character.displayName.ToUpper();
+            if (s.P2Character != null && !string.IsNullOrEmpty(s.P2Character.displayName))
+                _p2Name = s.P2Character.displayName.ToUpper();
         }
 
         private void Update()
@@ -62,10 +80,21 @@ namespace SamuraiFighter.Match
             {
                 case Phase.Intro:
                     _phaseTimer -= Time.deltaTime;
+                    // Open on a "P1 VS P2" card, then flip to "ROUND n" for the back half.
+                    if (!_introSwitched && _phaseTimer <= _introSeconds * 0.5f)
+                    {
+                        _introSwitched = true;
+                        ShowBanner("ROUND " + _roundNumber);
+                    }
                     if (_phaseTimer <= 0f) BeginRound();
                     break;
 
                 case Phase.InRound:
+                    if (_fightBannerTimer > 0f)
+                    {
+                        _fightBannerTimer -= Time.deltaTime;
+                        if (_fightBannerTimer <= 0f) HideBanner();
+                    }
                     if (_p1Health != null && _p1Health.IsDead) { EndRound(2, "K.O."); break; }
                     if (_p2Health != null && _p2Health.IsDead) { EndRound(1, "K.O."); break; }
                     if (_timer != null && !_timer.IsRunning && _timer.Remaining <= 0f)
@@ -95,7 +124,8 @@ namespace SamuraiFighter.Match
             if (_p2 != null) _p2.ResetFighter(_p2Start, false);
             SetInputEnabled(false);
             if (_timer != null) _timer.Stop();
-            ShowBanner("ROUND " + _roundNumber);
+            _introSwitched = false;
+            ShowBanner(_p1Name + "   VS   " + _p2Name);
             _phase = Phase.Intro;
             _phaseTimer = _introSeconds;
         }
@@ -103,8 +133,10 @@ namespace SamuraiFighter.Match
         private void BeginRound()
         {
             SetInputEnabled(true);
-            HideBanner();
+            ShowBanner("FIGHT!");
+            _fightBannerTimer = 0.7f;
             if (_timer != null) _timer.StartTimer(_roundSeconds);
+            AudioManager.Play(SfxId.RoundStart);
             _phase = Phase.InRound;
         }
 
@@ -115,7 +147,12 @@ namespace SamuraiFighter.Match
             if (winner == 1) _p1Wins++;
             else if (winner == 2) _p2Wins++;
             UpdatePips();
-            string who = winner == 1 ? "P1" : (winner == 2 ? "P2" : "DRAW");
+
+            // Celebratory sparkle shower over the round winner.
+            Fighter champ = winner == 1 ? _p1 : (winner == 2 ? _p2 : null);
+            if (champ != null) Vfx.Celebrate((Vector2)champ.transform.position + Vector2.up * 0.5f);
+
+            string who = winner == 1 ? _p1Name : (winner == 2 ? _p2Name : "DRAW");
             ShowBanner(reason + (winner == 0 ? "" : " — " + who));
             _phase = Phase.RoundEnd;
             _phaseTimer = _roundEndSeconds;
@@ -124,9 +161,25 @@ namespace SamuraiFighter.Match
         private void BeginMatchEnd()
         {
             SetInputEnabled(false);
-            string who = _p1Wins > _p2Wins ? "P1 WINS" : (_p2Wins > _p1Wins ? "P2 WINS" : "DRAW");
+            int winner = _p1Wins > _p2Wins ? 1 : (_p2Wins > _p1Wins ? 2 : 0);
+
+            // If we came through the menu flow, hand off to the Result scene; otherwise
+            // (Fight scene played directly) fall back to the in-place banner + R restart.
+            if (GameSession.Instance != null)
+            {
+                GameSession.Instance.LastWinner = winner;
+                SceneFlow.Load(SceneFlow.Result);
+                return;
+            }
+
+            string who = winner == 1 ? "P1 WINS" : (winner == 2 ? "P2 WINS" : "DRAW");
             ShowBanner(who + "\nPress R");
             _phase = Phase.MatchEnd;
+        }
+
+        public void SetRoundsToWin(int rounds)
+        {
+            _roundsToWin = Mathf.Max(1, rounds);
         }
 
         private void SetInputEnabled(bool enabled)

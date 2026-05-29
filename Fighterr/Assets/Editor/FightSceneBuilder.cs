@@ -10,6 +10,7 @@ using SamuraiFighter.Combat;
 using Object = UnityEngine.Object;
 using SamuraiFighter.Input;
 using SamuraiFighter.Match;
+using SamuraiFighter.Stages;
 using SamuraiFighter.UI;
 
 namespace SamuraiFighter.EditorTools
@@ -52,16 +53,23 @@ namespace SamuraiFighter.EditorTools
             var kenshin = EnsureKenshinCharacter(kenshinMoves);
             var yori = EnsureYoriCharacter(yoriMoves);
 
+            // Rest of the roster — these become selectable automatically (CharacterSelect
+            // loads every CharacterData asset). The Fight scene still bakes Kenshin/Yori as
+            // defaults; FightBootstrap swaps in the chosen pair at runtime.
+            EnsureExtraRoster(fireballPrefab);
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             var whiteSprite = CreateWhiteSprite();
 
-            BuildBackground();
+            BuildProceduralStage();
             BuildGround(whiteSprite, groundLayer);
             BuildWalls();
             var fighters = BuildFighters(whiteSprite, groundLayer, hurtboxLayer, actions, kenshin, yori);
             var hud = BuildHUD(whiteSprite, fighters.playerHealth, fighters.dummyHealth, fighters.playerMeter, fighters.dummyMeter);
             FrameCamera();
-            BuildMatchController(fighters, hud);
+            BuildBattleCamera(fighters);
+            var match = BuildMatchController(fighters, hud);
+            BuildFightBootstrap(fighters, match);
 
             if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
@@ -168,9 +176,10 @@ namespace SamuraiFighter.EditorTools
             EditorUtility.SetDirty(fighter);
 
             ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, character.lightHitboxSize);
-            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, character.heavyHitboxSize);
+            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, character.heavyHitboxSize, heavyImpact: true);
 
             AttachSpriteAnimator(player, sr, fighter, clips);
+            player.AddComponent<MotionTrail>();
 
             if (actions != null)
             {
@@ -181,12 +190,13 @@ namespace SamuraiFighter.EditorTools
             return (health, fighter, input, meter);
         }
 
-        private static void ConfigureHitbox(Hitbox hb, Fighter owner, int hurtboxLayer, Vector2 size)
+        private static void ConfigureHitbox(Hitbox hb, Fighter owner, int hurtboxLayer, Vector2 size, bool heavyImpact = false)
         {
             var so = new SerializedObject(hb);
             so.FindProperty("_owner").objectReferenceValue = owner;
             so.FindProperty("_hurtboxLayer").intValue = 1 << hurtboxLayer;
             so.FindProperty("_size").vector2Value = size;
+            so.FindProperty("_heavyImpact").boolValue = heavyImpact;
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -249,9 +259,10 @@ namespace SamuraiFighter.EditorTools
             EditorUtility.SetDirty(fighter);
 
             ConfigureHitbox(lightHitbox, fighter, hurtboxLayer, character.lightHitboxSize);
-            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, character.heavyHitboxSize);
+            ConfigureHitbox(heavyHitbox, fighter, hurtboxLayer, character.heavyHitboxSize, heavyImpact: true);
 
             AttachSpriteAnimator(dummy, sr, fighter, clips);
+            dummy.AddComponent<MotionTrail>();
 
             var ai = dummy.AddComponent<DummyAI>();
             var aiSO = new SerializedObject(ai);
@@ -310,6 +321,13 @@ namespace SamuraiFighter.EditorTools
             canvasGO.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             canvasGO.GetComponent<CanvasScaler>().referenceResolution = new Vector2(1920, 1080);
             canvasGO.AddComponent<GraphicRaycaster>();
+
+            // Low-health danger vignette for the human player — added first so it renders behind the HUD.
+            var vignetteGO = new GameObject("LowHealthVignette");
+            vignetteGO.transform.SetParent(canvasGO.transform, false);
+            var vignette = vignetteGO.AddComponent<LowHealthVignette>();
+            vignette.Bind(player);
+            vignetteGO.transform.SetAsFirstSibling();
 
             CreateHealthBar(canvasGO.transform, sprite, "P1Bar", player, new Vector2(40f, -40f), TextAnchor.UpperLeft, false);
             CreateHealthBar(canvasGO.transform, sprite, "P2Bar", dummy, new Vector2(-40f, -40f), TextAnchor.UpperRight, true);
@@ -432,6 +450,7 @@ namespace SamuraiFighter.EditorTools
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.enabled = false;
+            go.AddComponent<AnnouncerText>();
             return text;
         }
 
@@ -559,6 +578,17 @@ namespace SamuraiFighter.EditorTools
             cam.backgroundColor = new Color(0.08f, 0.08f, 0.1f);
         }
 
+        private static void BuildBattleCamera(FightersRefs f)
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            var bc = cam.GetComponent<BattleCamera>();
+            if (bc == null) bc = cam.gameObject.AddComponent<BattleCamera>();
+            bc.Configure(f.playerFighter != null ? f.playerFighter.transform : null,
+                         f.dummyFighter != null ? f.dummyFighter.transform : null,
+                         -8f, 8f);
+        }
+
         private static Sprite CreateWhiteSprite()
         {
             var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
@@ -568,6 +598,20 @@ namespace SamuraiFighter.EditorTools
             tex.Apply();
             tex.filterMode = FilterMode.Point;
             return Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+        }
+
+        private static void BuildProceduralStage()
+        {
+            var go = new GameObject("Stage");
+            var stage = go.AddComponent<StageRenderer>();
+            // Hand the painted dojo background to the stage; it picks a theme at runtime.
+            var dojo = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/Stages/Dojo/background.png");
+            if (dojo != null)
+            {
+                var so = new SerializedObject(stage);
+                so.FindProperty("_dojoBackground").objectReferenceValue = dojo;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
         }
 
         private static void BuildBackground()
@@ -784,6 +828,93 @@ namespace SamuraiFighter.EditorTools
             }, moves);
         }
 
+        // Adds the rest of the DESIGN.md roster. Each fighter is one EnsureRosterEntry call.
+        // Frame data follows each archetype: Riku = hyper-fast rushdown, Tama = patient
+        // technical, Gorou = slow heavy grappler, Sayo = mid-range tricky.
+        private static void EnsureExtraRoster(GameObject fireballPrefab)
+        {
+            EnsureRosterEntry(fireballPrefab, "Riku", new Color(0.40f, 0.90f, 0.70f), 6.5f, 8.5f,
+                new Vector2(1.3f, 1.0f), new Vector2(1.6f, 1.05f),
+                light: (4, 2, 8, 6, 5f, 6, 1.3f, 2, 2),
+                heavy: (11, 3, 18, 14, 10f, 10, 1.5f, 4, 3),
+                super: (6, 12, 22, 32, 7f, 12, 0.40f),
+                fireball: (10, 2, 16));
+
+            EnsureRosterEntry(fireballPrefab, "Tama", new Color(1.0f, 0.50f, 0.60f), 4.5f, 7.5f,
+                new Vector2(1.7f, 1.05f), new Vector2(2.1f, 1.1f),
+                light: (7, 3, 12, 10, 9f, 8, 1.2f, 2, 3),
+                heavy: (16, 4, 22, 20, 14f, 12, 1.35f, 4, 6),
+                super: (12, 12, 26, 38, 14f, 15, 0.50f),
+                fireball: (14, 2, 20));
+
+            EnsureRosterEntry(fireballPrefab, "Gorou", new Color(0.90f, 0.60f, 0.30f), 3.2f, 6.5f,
+                new Vector2(1.9f, 1.2f), new Vector2(2.6f, 1.3f),
+                light: (9, 4, 16, 14, 12f, 10, 1.15f, 2, 5),
+                heavy: (24, 6, 30, 32, 20f, 18, 1.30f, 5, 10),
+                super: (16, 14, 32, 50, 18f, 20, 0.55f),
+                fireball: (22, 2, 26));
+
+            EnsureRosterEntry(fireballPrefab, "Sayo", new Color(0.40f, 0.60f, 1.0f), 5.0f, 8.0f,
+                new Vector2(2.0f, 1.0f), new Vector2(2.7f, 1.1f),
+                light: (8, 4, 13, 9, 8f, 8, 1.25f, 3, 3),
+                heavy: (18, 5, 24, 22, 15f, 13, 1.40f, 5, 7),
+                super: (13, 12, 27, 40, 13f, 15, 0.50f),
+                fireball: (16, 2, 22));
+        }
+
+        private static void EnsureRosterEntry(GameObject fireballPrefab, string name, Color tint,
+            float walkSpeed, float jumpForce, Vector2 lightHb, Vector2 heavyHb,
+            (int s, int a, int r, int dmg, float kb, int hs, float cb, int csr, int cms) light,
+            (int s, int a, int r, int dmg, float kb, int hs, float cb, int csr, int cms) heavy,
+            (int s, int a, int r, int dmg, float kb, int hs, float flash) super,
+            (int s, int a, int r) fireball)
+        {
+            EnsureFolder("Assets/ScriptableObjects");
+            EnsureFolder(MovesFolder);
+            EnsureFolder(CharactersFolder);
+
+            var lightMove = LoadOrCreateMove(name + "_Light", m =>
+            {
+                m.attackKind = AttackKind.Light; m.delivery = MoveDelivery.Hitbox; m.hitboxSlot = HitboxSlot.Light;
+                m.startup = light.s; m.active = light.a; m.recovery = light.r;
+                m.damage = light.dmg; m.knockback = light.kb; m.hitstopFrames = light.hs;
+                m.comboDamageBonus = light.cb; m.comboStartupReduction = light.csr; m.comboMinStartup = light.cms;
+            });
+            var heavyMove = LoadOrCreateMove(name + "_Heavy", m =>
+            {
+                m.attackKind = AttackKind.Heavy; m.delivery = MoveDelivery.Hitbox; m.hitboxSlot = HitboxSlot.Heavy;
+                m.startup = heavy.s; m.active = heavy.a; m.recovery = heavy.r;
+                m.damage = heavy.dmg; m.knockback = heavy.kb; m.hitstopFrames = heavy.hs;
+                m.comboDamageBonus = heavy.cb; m.comboStartupReduction = heavy.csr; m.comboMinStartup = heavy.cms;
+            });
+            var superMove = LoadOrCreateMove(name + "_Super", m =>
+            {
+                m.attackKind = AttackKind.Super; m.delivery = MoveDelivery.Hitbox; m.hitboxSlot = HitboxSlot.Heavy;
+                m.startup = super.s; m.active = super.a; m.recovery = super.r;
+                m.damage = super.dmg; m.knockback = super.kb; m.hitstopFrames = super.hs;
+                m.superCost = 100; m.superFlashDuration = super.flash;
+            });
+            var fireballMove = LoadOrCreateMove(name + "_Fireball", m =>
+            {
+                m.attackKind = AttackKind.Fireball; m.delivery = MoveDelivery.Projectile;
+                m.startup = fireball.s; m.active = fireball.a; m.recovery = fireball.r;
+                m.projectilePrefab = fireballPrefab;
+            });
+            EnsureProjectilePrefab(fireballMove, fireballPrefab);
+
+            var set = new MoveSet { light = lightMove, heavy = heavyMove, super = superMove, fireball = fireballMove };
+            LoadOrCreateCharacter(name, c =>
+            {
+                c.displayName = name;
+                c.tint = tint;
+                c.walkSpeed = walkSpeed;
+                c.jumpForce = jumpForce;
+                c.lightHitboxSize = lightHb;
+                c.heavyHitboxSize = heavyHb;
+            }, set);
+            AssetDatabase.SaveAssets();
+        }
+
         private static CharacterData LoadOrCreateCharacter(string name, System.Action<CharacterData> configure, MoveSet moves)
         {
             string path = $"{CharactersFolder}/{name}.asset";
@@ -832,12 +963,23 @@ namespace SamuraiFighter.EditorTools
             AssetDatabase.CreateFolder(parent, leaf);
         }
 
-        private static void BuildMatchController(FightersRefs f, HUDRefs h)
+        private static MatchController BuildMatchController(FightersRefs f, HUDRefs h)
         {
             var go = new GameObject("MatchController");
             var mc = go.AddComponent<MatchController>();
             mc.Configure(f.playerFighter, f.dummyFighter, f.playerHealth, f.dummyHealth,
                          f.playerInput, f.dummyAI, h.timer, h.banner, h.p1Pips, h.p2Pips);
+            return mc;
+        }
+
+        private static void BuildFightBootstrap(FightersRefs f, MatchController match)
+        {
+            var go = new GameObject("FightBootstrap");
+            var boot = go.AddComponent<FightBootstrap>();
+            boot.Configure(f.playerFighter, f.dummyFighter,
+                           f.playerFighter != null ? f.playerFighter.GetComponent<SpriteRenderer>() : null,
+                           f.dummyFighter != null ? f.dummyFighter.GetComponent<SpriteRenderer>() : null,
+                           match);
         }
 
         private static void AddSceneToBuildSettings(string path)

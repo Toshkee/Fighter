@@ -13,6 +13,12 @@ namespace SamuraiFighter.Combat
 
         public static void Shake(float duration, float magnitude)
         {
+            // When the dynamic battle camera is present it owns the transform; route shake there.
+            if (BattleCamera.Instance != null)
+            {
+                BattleCamera.Instance.AddShake(duration, magnitude);
+                return;
+            }
             EnsureInstance();
             if (_instance == null) return;
             _instance._duration = Mathf.Max(_instance._duration, duration);

@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d28853fb4c90a4de8b0eeeb65646e757, type: 3}
+  m_Name: Sayo_Heavy
+  m_EditorClassIdentifier: Assembly-CSharp::SamuraiFighter.Combat.MoveData
+  moveName: Sayo_Heavy
+  attackKind: 2
+  delivery: 0
+  hitboxSlot: 1
+  startup: 18
+  active: 5
+  recovery: 24
+  damage: 22
+  knockback: 15
+  hitstopFrames: 13
+  comboDamageBonus: 1.4
+  comboStartupReduction: 5
+  comboMinStartup: 7
+  superCost: 0
+  superFlashDuration: 0
+  projectilePrefab: {fileID: 0}

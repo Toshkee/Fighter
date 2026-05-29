@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f6ed8711599a4345923d97cf1586a90, type: 3}
+  m_Name: Riku
+  m_EditorClassIdentifier: Assembly-CSharp::SamuraiFighter.Characters.CharacterData
+  displayName: Riku
+  tint: {r: 0.4, g: 0.9, b: 0.7, a: 1}
+  walkSpeed: 6.5
+  jumpForce: 8.5
+  lightHitboxSize: {x: 1.3, y: 1}
+  heavyHitboxSize: {x: 1.6, y: 1.05}
+  light: {fileID: 11400000, guid: db3e371f94a2944509bbdaeca21155d4, type: 2}
+  heavy: {fileID: 11400000, guid: 1859792288d0c4fda9f95231616bb21d, type: 2}
+  super: {fileID: 11400000, guid: 67bb479cf9f9948c486bdebbc07c9975, type: 2}
+  fireball: {fileID: 11400000, guid: 8e8ebcbf091df43d1831b4c123b0b266, type: 2}

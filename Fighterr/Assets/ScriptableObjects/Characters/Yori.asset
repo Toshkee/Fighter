@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f6ed8711599a4345923d97cf1586a90, type: 3}
+  m_Name: Yori
+  m_EditorClassIdentifier: Assembly-CSharp::SamuraiFighter.Characters.CharacterData
+  displayName: Yori
+  tint: {r: 0.85, g: 0.55, b: 1, a: 1}
+  walkSpeed: 4
+  jumpForce: 7.5
+  lightHitboxSize: {x: 2.2, y: 1}
+  heavyHitboxSize: {x: 2.9, y: 1.1}
+  light: {fileID: 11400000, guid: a9c903b45f90c4464bb5cbd1b84e0abe, type: 2}
+  heavy: {fileID: 11400000, guid: 7f34866457bc04d2bbf29d07b84bb6aa, type: 2}
+  super: {fileID: 11400000, guid: 2158f37c4f8ba43208da3bc70d0d517b, type: 2}
+  fireball: {fileID: 11400000, guid: de1e4d107c311402cb4e6682d9c0a9e2, type: 2}

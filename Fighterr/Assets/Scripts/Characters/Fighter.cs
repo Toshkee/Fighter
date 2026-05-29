@@ -1,5 +1,7 @@
 using UnityEngine;
 using SamuraiFighter.Combat;
+using SamuraiFighter.Managers;
+using SamuraiFighter.Utils;
 
 namespace SamuraiFighter.Characters
 {
@@ -94,6 +96,7 @@ namespace SamuraiFighter.Characters
 
         private int _comboWindow;
         private int _comboStep;
+        private bool _wasGrounded = true;
 
         public FighterState CurrentState => _currentState;
         public AttackKind CurrentAttackKind => _currentAttackKind;
@@ -107,6 +110,7 @@ namespace SamuraiFighter.Characters
         public bool IsInvulnerable => _iFrames > 0 || IsDead;
         public bool IsDashing => _dashFramesLeft > 0;
         public float BlockDamageMultiplier => _blockDamageMultiplier;
+        public int ComboStep => _comboStep;
 
         private int _hitFrame;
 
@@ -163,6 +167,10 @@ namespace SamuraiFighter.Characters
             _currentState = FighterState.Dead;
             _rb.linearVelocity = new Vector2(_rb.linearVelocity.x * 0.3f, _rb.linearVelocity.y);
             transform.rotation = Quaternion.Euler(0f, 0f, _facingRight ? -75f : 75f);
+            AudioManager.Play(SfxId.KO, 1f, 0.04f);
+            CameraShake.Shake(0.5f, 0.35f);
+            KoSequence.Play();
+            if (BattleCamera.Instance != null) BattleCamera.Instance.FocusKo(transform);
         }
 
         public void ResetFighter(Vector3 position, bool facingRight)
@@ -201,6 +209,18 @@ namespace SamuraiFighter.Characters
             _heavyMove = heavy;
             _superMove = super;
             _fireballMove = fireball;
+        }
+
+        public void SetMovement(float walkSpeed, float jumpForce)
+        {
+            _walkSpeed = walkSpeed;
+            _jumpForce = jumpForce;
+        }
+
+        public void SetHitboxSizes(Vector2 light, Vector2 heavy)
+        {
+            if (_lightAttackHitbox != null) _lightAttackHitbox.SetSize(light);
+            if (_heavyAttackHitbox != null) _heavyAttackHitbox.SetSize(heavy);
         }
 
         public void SetMoveInput(float horizontal) => _moveInput = horizontal;
@@ -264,6 +284,8 @@ namespace SamuraiFighter.Characters
                 _currentAttackKind = AttackKind.None;
                 if (_activeHitbox != null) _activeHitbox.Activate(0, 0, 0f, 0);
             }
+            AudioManager.Play(SfxId.Dash);
+            if (_groundCheck != null) Vfx.Dust(_groundCheck.position, (int)_dashDir);
             return true;
         }
 
@@ -300,6 +322,17 @@ namespace SamuraiFighter.Characters
             var go = Instantiate(_fireballMove.projectilePrefab, transform.position + new Vector3(_facingRight ? 0.6f : -0.6f, 0.1f, 0f), Quaternion.identity);
             var proj = go.GetComponent<Projectile>();
             if (proj != null) proj.Launch(this, _facingRight ? 1f : -1f);
+            AudioManager.Play(SfxId.Fireball);
+        }
+
+        private void PlaySwingSound()
+        {
+            switch (_currentAttackKind)
+            {
+                case AttackKind.Heavy: AudioManager.Play(SfxId.HeavySwing); break;
+                case AttackKind.Super: AudioManager.Play(SfxId.Super, 1f, 0.03f); break;
+                default: AudioManager.Play(SfxId.LightSwing); break;
+            }
         }
 
         private void StartAttack(AttackKind kind, Hitbox hb, int startup, int active, int recovery, int damage, float knockback, int hitstop)
@@ -344,6 +377,10 @@ namespace SamuraiFighter.Characters
 
             _isGrounded = Physics2D.OverlapCircle(_groundCheck.position, _groundCheckRadius, _groundLayer);
 
+            if (_isGrounded && !_wasGrounded && _rb.linearVelocity.y <= 0.1f)
+                Vfx.Dust(_groundCheck.position, _facingRight ? 1 : -1);
+            _wasGrounded = _isGrounded;
+
             if (IsHit)
             {
                 _rb.linearVelocity = new Vector2(_rb.linearVelocity.x * 0.85f, _rb.linearVelocity.y);
@@ -378,6 +415,7 @@ namespace SamuraiFighter.Characters
                 else if (_activeHitbox != null)
                 {
                     _activeHitbox.Activate(_activeActiveFrames, _activeDamage, _activeKnockback, _activeHitstop);
+                    PlaySwingSound();
                 }
             }
 
@@ -410,6 +448,8 @@ namespace SamuraiFighter.Characters
             if (_jumpPressed && _isGrounded && !_crouchHeld)
             {
                 _rb.linearVelocity = new Vector2(_rb.linearVelocity.x, _jumpForce);
+                AudioManager.Play(SfxId.Jump);
+                if (_groundCheck != null) Vfx.Dust(_groundCheck.position, _facingRight ? 1 : -1);
             }
             _jumpPressed = false;
         }

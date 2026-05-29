@@ -16,6 +16,16 @@ namespace SamuraiFighter.Combat
             _instance._current = _instance.StartCoroutine(_instance.Run(frames));
         }
 
+        /// <summary>Stop any in-progress hitstop without restoring timescale (the caller takes over).</summary>
+        public static void Cancel()
+        {
+            if (_instance != null && _instance._current != null)
+            {
+                _instance.StopCoroutine(_instance._current);
+                _instance._current = null;
+            }
+        }
+
         private static void EnsureInstance()
         {
             if (_instance != null) return;
